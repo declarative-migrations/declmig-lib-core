@@ -1,0 +1,52 @@
+name: Freeze schema parity review outputs once
+on:
+  push:
+    branches:
+      - codex/den-3321-schema-projection-parity
+permissions:
+  contents: write
+concurrency:
+  group: schema-parity-freeze
+  cancel-in-progress: false
+jobs:
+  freeze:
+    if: github.repository == 'declarative-migrations/declmig-lib-core'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+      - name: Install exact Zed CLI
+        run: |
+          cargo install --git https://github.com/zed-pkg/zed-cli.git --rev dbd63f1d87d12c2e8cb9a8c600fae9b79f94e559 --locked --root "$RUNNER_TEMP/declmig-zed"
+          echo "$RUNNER_TEMP/declmig-zed/bin" >> "$GITHUB_PATH"
+      - name: Generate, format, and verify exact review outputs
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          zed validate
+          cargo generate-lockfile
+          zed task --plan contracts/schema-parity/zed-env.json run lock --yes --no-cache
+          zed task --plan contracts/schema-parity/zed-env.json run generate --yes --no-cache
+          cargo fmt --all
+          cargo test --all-targets
+          cargo clippy --all-targets -- -D warnings
+          rm -rf contracts/schema-parity/generated-second
+      - name: Commit only reviewed deterministic outputs and remove this workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- Cargo.lock contracts/schema-parity/package-lock.json src tests
+          git add -f -- contracts/schema-parity/generated-current/declmig-schema-parity.json
+          git rm -- .github/workflows/schema-parity-freeze.yml
+          unexpected="$(git diff --cached --name-only | grep -Ev '^(Cargo.lock|contracts/schema-parity/package-lock.json|contracts/schema-parity/generated-current/declmig-schema-parity.json|src/.*\.rs|tests/.*\.rs|\.github/workflows/schema-parity-freeze\.yml)$' || true)"
+          test -z "$unexpected"
+          git commit -m 'chore(DEN-3321): freeze schema parity locks and generated evidence'
+          git push origin HEAD:refs/heads/codex/den-3321-schema-projection-parity

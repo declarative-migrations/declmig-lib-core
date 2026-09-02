@@ -300,7 +300,7 @@ fn attribute_string(attribute: &str, key: &str) -> Option<String> {
 
 fn attribute_flag(attribute: &str, key: &str) -> bool {
     attribute
-        .split(|character: char| matches!(character, '#' | '[' | ']' | '(' | ')' | ','))
+        .split(['#', '[', ']', '(', ')', ','])
         .any(|part| part.trim() == key)
 }
 

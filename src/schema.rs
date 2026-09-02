@@ -4,8 +4,7 @@
 pub const SCHEMA_REVISION: &str = "declmig-0001";
 
 /// Versioned peer-authority evidence required before packaging a schema release.
-pub const PEER_AUTHORITY_CERTIFICATION_FORMAT: &str =
-    "declmig.peer-authority-certification/v1";
+pub const PEER_AUTHORITY_CERTIFICATION_FORMAT: &str = "declmig.peer-authority-certification/v1";
 
 /// `lib-core` never elects a contract source or ORM when peers disagree.
 pub const AUTOMATIC_AUTHORITY_WINNER_ALLOWED: bool = false;

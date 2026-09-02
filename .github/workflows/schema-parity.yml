@@ -91,9 +91,12 @@ jobs:
         working-directory: contracts/schema-parity
         run: |
           set -euo pipefail
+          test "$(npm --version)" = '10.9.2'
           rm -f package-lock.json
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          printf '%s  %s\n' "$PACKAGE_LOCK_SHA256" package-lock.json | sha256sum --check --strict
+          actual_lock_sha256="$(sha256sum package-lock.json | awk '{print $1}')"
+          echo "generated package-lock sha256=$actual_lock_sha256"
+          test "$actual_lock_sha256" = "$PACKAGE_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Generate the TypeSpec evidence envelope twice
@@ -107,10 +110,9 @@ jobs:
           ./node_modules/.bin/tsp compile main.tsp --output-dir "$first" --warn-as-error
           ./node_modules/.bin/tsp compile main.tsp --output-dir "$second" --warn-as-error
           diff -ru --no-dereference "$first" "$second"
-          printf '%s  %s\n' \
-            "$GENERATED_SCHEMA_SHA256" \
-            "$first/declmig-schema-parity.json" \
-            | sha256sum --check --strict
+          actual_schema_sha256="$(sha256sum "$first/declmig-schema-parity.json" | awk '{print $1}')"
+          echo "generated TypeSpec evidence-envelope sha256=$actual_schema_sha256"
+          test "$actual_schema_sha256" = "$GENERATED_SCHEMA_SHA256"
           python3 -m json.tool "$first/declmig-schema-parity.json" >/dev/null
 
       - name: Format, test, lint, and release-build the Rust comparator

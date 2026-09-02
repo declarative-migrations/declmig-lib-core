@@ -1,3 +1,8 @@
+// This is a TypeSpec-lane evidence-envelope contract only.
+// JSON Schema emitted from this file is a derived diagnostic artifact. It may
+// not replace, feed, or certify the independently authored JSON Schema/OpenAPI
+// production source lane. See contracts/source-authority/authority.v1.json.
+
 import "@typespec/json-schema";
 
 using TypeSpec.JsonSchema;

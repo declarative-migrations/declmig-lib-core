@@ -47,12 +47,13 @@ jobs:
           cd contracts/schema-parity
           ./node_modules/.bin/tsp compile main.tsp --output-dir generated-second --warn-as-error
           diff -ru generated-current generated-second
-      - name: Rust format, tests, and lint
+      - name: Rust format, tests, lint, and committed-format check
         run: |
-          cargo fmt --all -- --check
+          cargo fmt --all
           cargo test --all-targets
           cargo clippy --all-targets -- -D warnings
-      - name: Upload non-secret locks and generated contract for review
+          git diff --exit-code -- '*.rs'
+      - name: Upload non-secret locks, generated contract, and formatted source for review
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -61,5 +62,7 @@ jobs:
             Cargo.lock
             contracts/schema-parity/package-lock.json
             contracts/schema-parity/generated-current/
+            src/
+            tests/
           if-no-files-found: warn
           retention-days: 14

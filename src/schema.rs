@@ -32,7 +32,7 @@ pub fn schema_release_policy() -> SchemaReleasePolicy {
 
 #[cfg(test)]
 mod tests {
-    use super::{PEER_AUTHORITY_CERTIFICATION_FORMAT, SchemaReleasePolicy, schema_release_policy};
+    use super::{schema_release_policy, SchemaReleasePolicy, PEER_AUTHORITY_CERTIFICATION_FORMAT};
 
     #[test]
     fn schema_release_policy_is_fail_closed() {

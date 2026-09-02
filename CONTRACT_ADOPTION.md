@@ -1,34 +1,79 @@
 # Fleet adoption contract
 
-Each database-backed product organization adopts this gate in its canonical
-`<product>-lib-core` repository, not in the web/API server or compatibility ORM
-repository.
+Each database-backed product organization adopts the convergence gates in its
+canonical `<product>-lib-core` repository. Web/API servers and `*-orm-core`
+packages consume reviewed generated artifacts; they do not become schema or
+migration authorities.
 
-Required inputs:
+## Required independent roots
 
-- canonical `desired.sql` and persistence JSON Schema;
-- exact DPM, Diesel CLI and SeaORM CLI versions;
-- database engine and schema namespace;
-- generated Diesel schema and SeaORM entity directories;
-- exact source, SQL, JSON Schema, generator and output digests;
-- paired `*-test` shadow-database evidence before production promotion.
+Every adopter must retain:
 
-Every projection and report is a sealed artifact. It must validate against the
-reviewed TypeSpec-generated Draft 2020-12 JSON Schema and deserialize through
-Rust models that reject unknown fields. Column ordinals must be unique,
-positive, and contiguous from one. This prevents a producer and consumer from
-silently interpreting extra properties or sparse column order differently.
+- a TypeSpec source manifest, source revision, compiler lock, semantic IR,
+  independently generated SQL, Protobuf descriptors/gRPC services, and
+  wire-client semantic/output digests;
+- a separately human-authored JSON Schema/OpenAPI source manifest, source
+  revision, generator lock, semantic IR, independently generated SQL,
+  client-interface/type manifests, and write-client output digests;
+- an explicit, versioned, reviewed mapping for shared concepts across the two
+  lanes; and
+- derived translation artifacts only under a non-authoritative namespace with
+  origin, compiler, input, and output digests.
 
-The gate is additive to, not a replacement for, DPM convergence, migration
-replay, destructive-change review, database grants/RLS, cross-tenant negative
-tests and live catalog readback. PostgreSQL and CockroachDB must be recorded as
-separate evidence lanes. A PostgreSQL success is not CockroachDB certification.
+A TypeSpec-emitted JSON Schema/OpenAPI file may not replace or feed the
+independent JSON Schema/OpenAPI production root. A generated TypeSpec projection
+may not replace or feed the TypeSpec root.
 
-CI must remain read-only: it may regenerate ephemeral evidence and compare it
-to reviewed digests, but it must never push source, lockfiles, or generated
-artifacts back to its own pull-request branch.
+## Required convergence evidence
 
-`ores-otel` may receive only low-cardinality result metadata: project, source
-revision, engine, schema digest, generator versions, difference codes and final
-status. It must never receive database URLs, SQL containing literal data,
-credentials, row values, tenant identifiers or generated source bodies.
+Before promotion, CI must:
+
+1. generate `SQL_T` and `SQL_J` independently;
+2. apply them to separate disposable databases;
+3. compare normalized catalogs, including defaults, constraints, indexes,
+   vector dimensions, RLS/policies/grants, and ownership;
+4. compare both catalogs with reviewed DPM desired state and shadow/live
+   catalog read-back;
+5. compare TypeSpec-derived and JSON Schema/OpenAPI-derived shared client
+   semantics through the reviewed mapping;
+6. generate Diesel and SeaORM independently from the same pinned accepted
+   catalog, compare their structural projections, and run shared behavioral
+   fixtures; and
+7. record PostgreSQL and CockroachDB as separate evidence lanes.
+
+Required artifacts include exact source, compiler/generator, SQL, catalog,
+client-manifest, ORM, DPM-plan, and test-output digests. Every structured artifact
+must reject unknown fields and preserve deterministic ordering. The
+TypeSpec-generated Draft 2020-12 schema under `contracts/schema-parity/` may
+validate its own TypeSpec-lane evidence envelope, but it is not the neutral
+arbiter or the independently authored JSON Schema/OpenAPI source.
+
+## Discrepancy protocol
+
+Any unexplained difference changes the run to `STOPPED_FOR_EVALUATION`. CI must
+stop migration and ORM promotion, package/client publication, merge, and
+deployment; retain a deterministic fingerprint and minimal semantic diff;
+idempotently update one canonical GitHub/Linear record; and require a reviewed
+repair or a narrow expiring waiver followed by a clean rerun. No TypeSpec,
+JSON Schema/OpenAPI, Diesel, SeaORM, DPM, or live-catalog lane may be selected as
+a silent winner.
+
+The gate is additive to migration replay, destructive-change review, database
+permission/RLS review, cross-tenant negative tests, backup/restore, and live
+catalog read-back. ORM parity alone cannot certify persistence features outside
+the ORM projection surface.
+
+CI remains read-only: it may regenerate ephemeral evidence and compare it with
+reviewed digests, but it may not push source, locks, or generated artifacts back
+to its pull-request branch. Production mutation requires a separate reviewed
+migration/deployment plan with rollback evidence.
+
+`ores-otel` may receive only low-cardinality result metadata: project, exact
+revision, engine, source/generator versions, digests, stable difference codes,
+and final status. It must never receive database URLs, SQL containing literal
+data, credentials, row values, tenant identifiers, private source bodies, or
+generated client/ORM source.
+
+Implementations must follow the feature-branch, independent-review,
+exact-evidence, least-privilege, and credential boundaries in
+`ORESoftware/my-ai/AGENTS.md`.

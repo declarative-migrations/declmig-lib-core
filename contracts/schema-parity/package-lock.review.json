@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "format": "npm-lockfile-v3-gzip",
+  "node_version": "22.16.0",
+  "npm_version": "10.9.2",
+  "reviewed_roots": {
+    "@typespec/compiler": "1.15.0",
+    "@typespec/json-schema": "1.15.0"
+  },
+  "package_count": 74,
+  "package_inventory_sha256": "069b2df75722044bf82e6602e1507e948c9399c1ebf5719967735aee06c95b55",
+  "package_lock_sha256": "6e98459e9fb44e26fd487a6065221d8772ca6d347e5bea20d9573168055ee667",
+  "package_lock_gzip_sha256": "143a699309004cb5fed90203ed7f608d7f8ac6a96adefd86af81143a02f31afe",
+  "resolved_host_allowlist": [
+    "registry.npmjs.org"
+  ],
+  "all_packages_have_sha512_integrity": true,
+  "git_file_link_dependencies_present": false,
+  "install_scripts_present": false,
+  "evidence": {
+    "workflow_run_id": 33693407353,
+    "workflow_artifact_id": 9870887402,
+    "artifact_sha256": "c485c3f5a390123395ff89bb51f36ff2ecd0eccda5f4df7d4090cb38890dc61c",
+    "reviewed_head": "6b73c22234e1e7a607a1e1fc2eea546e18f2f9c5"
+  }
+}

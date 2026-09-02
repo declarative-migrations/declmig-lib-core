@@ -29,7 +29,10 @@ jobs:
     timeout-minutes: 25
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-      PACKAGE_LOCK_SHA256: 415bcb3c9e68a8c61d3625cead1edf825b39cf0af34b4a9300a43190fbdf7966
+      PACKAGE_LOCK_SHA256: 6e98459e9fb44e26fd487a6065221d8772ca6d347e5bea20d9573168055ee667
+      PACKAGE_LOCK_GZIP_SHA256: 143a699309004cb5fed90203ed7f608d7f8ac6a96adefd86af81143a02f31afe
+      PACKAGE_INVENTORY_SHA256: 069b2df75722044bf82e6602e1507e948c9399c1ebf5719967735aee06c95b55
+      PACKAGE_COUNT: '74'
       GENERATED_SCHEMA_SHA256: 54451a3428a52de34044e1a42d75087ccee58e5dc2fc253bee0da7ecee749791
     steps:
       - name: Check out the exact reviewed head
@@ -86,18 +89,21 @@ jobs:
           assert set(tasks['tasks']) == {'lock', 'install', 'generate'}
           PY
 
-      - name: Resolve the pinned TypeSpec lock for review
-        id: typespec-lock
+      - name: Install only from the reviewed TypeSpec lock
         shell: bash
         working-directory: contracts/schema-parity
         run: |
           set -euo pipefail
           test "$(npm --version)" = '10.9.2'
-          rm -f package-lock.json
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          actual_lock_sha256="$(sha256sum package-lock.json | awk '{print $1}')"
-          echo "generated package-lock sha256=$actual_lock_sha256"
-          echo "sha256=$actual_lock_sha256" >> "$GITHUB_OUTPUT"
+          printf '%s  %s\n' \
+            "$PACKAGE_LOCK_GZIP_SHA256" \
+            package-lock.json.gz \
+            | sha256sum --check --strict
+          gzip -dc package-lock.json.gz > package-lock.json
+          printf '%s  %s\n' \
+            "$PACKAGE_LOCK_SHA256" \
+            package-lock.json \
+            | sha256sum --check --strict
           npm ci --ignore-scripts --no-audit --no-fund
           npm ls --all --json > "$RUNNER_TEMP/typespec-npm-tree.json"
           python3 - <<'PY'
@@ -107,15 +113,23 @@ jobs:
           import json
           import os
           from pathlib import Path
+          from urllib.parse import urlsplit
 
           lock_path = Path('package-lock.json')
           lock = json.loads(lock_path.read_text(encoding='utf-8'))
+          review = json.loads(
+              Path('package-lock.review.json').read_text(encoding='utf-8')
+          )
           tree_path = Path(os.environ['RUNNER_TEMP']) / 'typespec-npm-tree.json'
           tree = json.loads(tree_path.read_text(encoding='utf-8'))
           expected_roots = {
               '@typespec/compiler': '1.15.0',
               '@typespec/json-schema': '1.15.0',
           }
+          expected_lock_sha = os.environ['PACKAGE_LOCK_SHA256']
+          expected_gzip_sha = os.environ['PACKAGE_LOCK_GZIP_SHA256']
+          expected_inventory_sha = os.environ['PACKAGE_INVENTORY_SHA256']
+          expected_count = int(os.environ['PACKAGE_COUNT'])
 
           packages = lock.get('packages')
           if not isinstance(packages, dict):
@@ -135,10 +149,18 @@ jobs:
                   raise SystemExit(f'invalid package-lock entry: {path}')
               version = package.get('version')
               integrity = package.get('integrity')
+              resolved = package.get('resolved')
               if not isinstance(version, str) or not version:
                   raise SystemExit(f'missing package version: {path}')
               if not isinstance(integrity, str) or not integrity.startswith('sha512-'):
                   raise SystemExit(f'missing sha512 integrity: {path}')
+              if not isinstance(resolved, str):
+                  raise SystemExit(f'missing package resolution: {path}')
+              parsed = urlsplit(resolved)
+              if parsed.scheme != 'https' or parsed.hostname != 'registry.npmjs.org':
+                  raise SystemExit(f'unreviewed package resolution: {path}')
+              if any(package.get(flag) for flag in ('link', 'inBundle', 'hasInstallScript')):
+                  raise SystemExit(f'forbidden package execution/link flag: {path}')
               name = path.rsplit('node_modules/', 1)[-1]
               inventory.append(
                   {
@@ -171,13 +193,45 @@ jobs:
               sort_keys=True,
               separators=(',', ':'),
           ).encode('utf-8')
+          lock_sha = hashlib.sha256(lock_path.read_bytes()).hexdigest()
+          gzip_sha = hashlib.sha256(Path('package-lock.json.gz').read_bytes()).hexdigest()
+          inventory_sha = hashlib.sha256(canonical_inventory).hexdigest()
+
+          if lock_sha != expected_lock_sha:
+              raise SystemExit('package-lock digest drift')
+          if gzip_sha != expected_gzip_sha:
+              raise SystemExit('compressed package-lock digest drift')
+          if inventory_sha != expected_inventory_sha:
+              raise SystemExit('package inventory digest drift')
+          if len(inventory) != expected_count:
+              raise SystemExit('package inventory count drift')
+
+          expected_review = {
+              'format': 'npm-lockfile-v3-gzip',
+              'node_version': '22.16.0',
+              'npm_version': '10.9.2',
+              'reviewed_roots': expected_roots,
+              'package_count': expected_count,
+              'package_inventory_sha256': expected_inventory_sha,
+              'package_lock_sha256': expected_lock_sha,
+              'package_lock_gzip_sha256': expected_gzip_sha,
+              'resolved_host_allowlist': ['registry.npmjs.org'],
+              'all_packages_have_sha512_integrity': True,
+              'git_file_link_dependencies_present': False,
+              'install_scripts_present': False,
+          }
+          for key, expected in expected_review.items():
+              if review.get(key) != expected:
+                  raise SystemExit(f'package-lock review drift: {key}')
+
           evidence = {
               'schema_version': 1,
               'node_version': '22.16.0',
               'npm_version': '10.9.2',
-              'package_lock_sha256': hashlib.sha256(lock_path.read_bytes()).hexdigest(),
+              'package_lock_sha256': lock_sha,
+              'package_lock_gzip_sha256': gzip_sha,
               'package_count': len(inventory),
-              'package_inventory_sha256': hashlib.sha256(canonical_inventory).hexdigest(),
+              'package_inventory_sha256': inventory_sha,
               'reviewed_roots': expected_roots,
               'packages': inventory,
           }
@@ -187,32 +241,31 @@ jobs:
               encoding='utf-8',
           )
           print(
-              'generated package inventory '
+              'reviewed package inventory '
               f"count={evidence['package_count']} "
               f"sha256={evidence['package_inventory_sha256']}"
           )
           PY
 
-      - name: Retain the TypeSpec lock evidence for review
+      - name: Audit the reviewed TypeSpec dependencies
+        shell: bash
+        working-directory: contracts/schema-parity
+        run: |
+          set -euo pipefail
+          npm audit --audit-level=high --no-fund
+
+      - name: Retain the TypeSpec lock evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: typespec-lock-evidence-${{ github.event.pull_request.head.sha }}
           path: |
             contracts/schema-parity/package-lock.json
+            contracts/schema-parity/package-lock.review.json
             ${{ runner.temp }}/typespec-lock-evidence.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
           compression-level: 9
-
-      - name: Verify the reviewed TypeSpec lock digest
-        shell: bash
-        env:
-          ACTUAL_LOCK_SHA256: ${{ steps.typespec-lock.outputs.sha256 }}
-        run: |
-          set -euo pipefail
-          test -n "$ACTUAL_LOCK_SHA256"
-          test "$ACTUAL_LOCK_SHA256" = "$PACKAGE_LOCK_SHA256"
 
       - name: Generate the TypeSpec evidence envelope twice
         shell: bash

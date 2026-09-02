@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
 use super::{
-    ColumnProjection, DatabaseEngine, DatabaseIdentity, GeneratorIdentity, ParityError,
-    ProjectionSource, SchemaProjection, TableProjection, PARITY_SCHEMA_VERSION,
-    normalize_type_family,
+    normalize_type_family, ColumnProjection, DatabaseEngine, DatabaseIdentity, GeneratorIdentity,
+    ParityError, ProjectionSource, SchemaProjection, TableProjection, PARITY_SCHEMA_VERSION,
 };
 
 pub fn parse_diesel_schema(
@@ -26,6 +25,9 @@ pub fn parse_diesel_schema(
         } else {
             index += 1;
         }
+    }
+    if tables.is_empty() && source.contains("table!") {
+        return Err(ParityError::InvalidGeneratedSource);
     }
     SchemaProjection {
         schema_version: PARITY_SCHEMA_VERSION,
@@ -118,7 +120,10 @@ fn parse_table_macro(
     Err(ParityError::InvalidGeneratedSource)
 }
 
-fn parse_table_header(line: &str, default_schema: &str) -> Result<(String, String, Vec<String>), ParityError> {
+fn parse_table_header(
+    line: &str,
+    default_schema: &str,
+) -> Result<(String, String, Vec<String>), ParityError> {
     let open = line.find('(').ok_or(ParityError::InvalidGeneratedSource)?;
     let close = line[open + 1..]
         .find(')')
@@ -173,7 +178,9 @@ fn normalize_generator_type(value: &str) -> Result<String, ParityError> {
 fn peel_wrapper<'a>(value: &'a str, wrapper: &str) -> Option<&'a str> {
     let value = value.trim();
     let prefix = format!("{wrapper}<");
-    value.strip_prefix(&prefix).and_then(|inner| inner.strip_suffix('>'))
+    value
+        .strip_prefix(&prefix)
+        .and_then(|inner| inner.strip_suffix('>'))
 }
 
 fn parse_sql_name(attribute: &str) -> Option<String> {
@@ -186,12 +193,18 @@ fn parse_sql_name(attribute: &str) -> Option<String> {
 }
 
 fn is_table_macro_start(line: &str) -> bool {
-    let compact = clean(line).chars().filter(|character| !character.is_whitespace()).collect::<String>();
+    let compact = clean(line)
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
     compact.ends_with("table!{")
 }
 
 fn clean(line: &str) -> &str {
-    line.split_once("//").map(|(before, _)| before).unwrap_or(line).trim()
+    line.split_once("//")
+        .map(|(before, _)| before)
+        .unwrap_or(line)
+        .trim()
 }
 
 fn strip_raw_identifier(value: &str) -> &str {

@@ -37,18 +37,21 @@ pub enum ProjectionSource {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct GeneratorIdentity {
     pub name: String,
     pub version: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DatabaseIdentity {
     pub engine: DatabaseEngine,
     pub schema: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ColumnProjection {
     pub name: String,
     pub ordinal: u32,
@@ -59,6 +62,7 @@ pub struct ColumnProjection {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TableProjection {
     pub schema: String,
     pub name: String,
@@ -68,6 +72,7 @@ pub struct TableProjection {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SchemaProjection {
     pub schema_version: u32,
     pub source: ProjectionSource,
@@ -110,8 +115,16 @@ impl SchemaProjection {
             table.columns.sort_by(|left, right| {
                 (left.ordinal, &left.name).cmp(&(right.ordinal, &right.name))
             });
+            if table
+                .columns
+                .iter()
+                .zip(1_u32..)
+                .any(|(column, ordinal)| column.ordinal != ordinal)
+            {
+                return Err(ParityError::InvalidOrdinal);
+            }
 
-            let known_columns: BTreeSet<_> = table
+            let known_columns: BTreeSet|_> = table
                 .columns
                 .iter()
                 .map(|column| column.name.as_str())
@@ -194,5 +207,54 @@ fn required_text(value: String) -> Result<String, ParityError> {
         Err(ParityError::InvalidText)
     } else {
         Ok(trimmed.to_owned())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{SchemaProjection, PARITY_SCHEMA_VERSION};
+
+    fn valid_projection() -> serde_json::Value {
+        json!( {
+            "schema_version": PARITY_SCHEMA_VERSION,
+            "source": "catalog",
+            "generator": {
+                "name": "catalog-snapshot",
+                "version": "1"
+            },
+            "database": {
+                "engine": "postgresql",
+                "schema": "public"
+            },
+            "tables": [{
+                "schema": "public",
+                "name": "widgets",
+                "primary_key": ["id"],
+                "columns": [{
+                    "name": "id",
+                    "ordinal": 1,
+                    "type_family": "uuid",
+                    "nullable": false
+                }]
+            }]
+        })
+    }
+
+    #[test]
+    fn serde_contract_rejects_unknown_fields() {
+        let mut value = valid_projection();
+        value["unexpected"] = json!(true);
+        assert!(serde_json::from_value::<SchemaProjection>(value).is_err());
+    }
+
+    #[test]
+    fn ordinals_must_be_contiguous() {
+        let mut value = valid_projection();
+        value["tables"][0]["columns"][0]["ordinal"] = json!(2);
+        let projection: SchemaProjection =
+            serde_json::from_value(value).expect("valid projection JSON");
+        assert!(projection.normalize().is_err());
     }
 }

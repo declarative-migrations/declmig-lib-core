@@ -20,6 +20,7 @@ pub enum DifferenceCode {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Difference {
     pub code: DifferenceCode,
     pub table: String,
@@ -32,12 +33,14 @@ pub struct Difference {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParityWarning {
     pub code: String,
     pub detail: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParityReport {
     pub schema_version: u32,
     pub expected_source: ProjectionSource,
@@ -233,4 +236,25 @@ fn compare_column(
 
 fn qualified_name(schema: &str, table: &str) -> String {
     format!("{schema}.{table}")
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::ParityReport;
+
+    #[test]
+    fn report_contract_rejects_unknown_fields() {
+        let value = json!({
+            "schema_version": 1,
+            "expected_source": "catalog",
+            "actual_source": "diesel-schema",
+            "compatible": true,
+            "differences": [],
+            "warnings": [],
+            "unexpected": true
+        });
+        assert!(serde_json::from_value::<ParityReport>(value).is_err());
+    }
 }

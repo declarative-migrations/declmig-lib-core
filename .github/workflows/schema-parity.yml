@@ -1,0 +1,65 @@
+name: Schema projection parity
+on:
+  pull_request:
+    paths:
+      - 'src/schema_parity/**'
+      - 'src/bin/declmig-schema-crosscheck.rs'
+      - 'tests/schema_parity.rs'
+      - 'contracts/schema-parity/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.zpkg.toml'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/schema-parity.yml'
+permissions:
+  contents: read
+concurrency:
+  group: schema-parity-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+      - name: Install exact Zed CLI
+        run: |
+          cargo install --git https://github.com/zed-pkg/zed-cli.git --rev dbd63f1d87d12c2e8cb9a8c600fae9b79f94e559 --locked --root "$RUNNER_TEMP/declmig-zed"
+          echo "$RUNNER_TEMP/declmig-zed/bin" >> "$GITHUB_PATH"
+      - name: Validate Zed package metadata
+        run: zed validate
+      - name: Resolve review artifacts only on the first run
+        run: |
+          if ! test -f Cargo.lock; then cargo generate-lockfile; fi
+          if ! test -f contracts/schema-parity/package-lock.json; then
+            zed task --plan contracts/schema-parity/zed-env.json run lock --yes --no-cache
+          fi
+      - name: Generate TypeSpec JSON Schema through Zed
+        run: zed task --plan contracts/schema-parity/zed-env.json run generate --yes --no-cache
+      - name: Generate a second deterministic contract projection
+        run: |
+          cd contracts/schema-parity
+          ./node_modules/.bin/tsp compile main.tsp --output-dir generated-second --warn-as-error
+          diff -ru generated-current generated-second
+      - name: Rust format, tests, and lint
+        run: |
+          cargo fmt --all -- --check
+          cargo test --all-targets
+          cargo clippy --all-targets -- -D warnings
+      - name: Upload non-secret locks and generated contract for review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: schema-parity-${{ github.event.pull_request.head.sha }}
+          path: |
+            Cargo.lock
+            contracts/schema-parity/package-lock.json
+            contracts/schema-parity/generated-current/
+          if-no-files-found: warn
+          retention-days: 14

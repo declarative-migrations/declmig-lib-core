@@ -1,0 +1,52 @@
+name: Dual source authority contract
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/source-authority/**'
+      - 'scripts/ci/validate_source_authority.py'
+      - 'tests/test_source_authority.py'
+      - 'README.md'
+      - 'CONTRACT_ADOPTION.md'
+      - '.github/workflows/source-authority.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-authority-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out the exact reviewed head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+
+      - name: Prove exact-head execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Validate independent roots and stop policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/ci/validate_source_authority.py \
+            tests/test_source_authority.py
+          python3 scripts/ci/validate_source_authority.py
+          python3 -m unittest discover \
+            -s tests \
+            -p 'test_source_authority.py' \
+            -v

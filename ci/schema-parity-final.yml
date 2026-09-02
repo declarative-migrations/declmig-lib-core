@@ -1,0 +1,57 @@
+name: Schema projection parity
+on:
+  pull_request:
+    paths:
+      - 'src/schema_parity/**'
+      - 'src/bin/declmig-schema-crosscheck.rs'
+      - 'tests/schema_parity.rs'
+      - 'contracts/schema-parity/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.zpkg.toml'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/schema-parity.yml'
+permissions:
+  contents: read
+concurrency:
+  group: schema-parity-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+      - name: Install exact Zed CLI
+        run: |
+          cargo install --git https://github.com/zed-pkg/zed-cli.git --rev dbd63f1d87d12c2e8cb9a8c600fae9b79f94e559 --locked --root "$RUNNER_TEMP/declmig-zed"
+          echo "$RUNNER_TEMP/declmig-zed/bin" >> "$GITHUB_PATH"
+      - name: Require frozen dependency and package metadata
+        run: |
+          test -f Cargo.lock
+          test -f contracts/schema-parity/package-lock.json
+          test -f contracts/schema-parity/generated-current/declmig-schema-parity.json
+          zed validate
+      - name: Regenerate the TypeSpec JSON Schema through Zed
+        run: |
+          cp contracts/schema-parity/generated-current/declmig-schema-parity.json "$RUNNER_TEMP/committed-schema.json"
+          zed task --plan contracts/schema-parity/zed-env.json run generate --yes --no-cache
+          cmp "$RUNNER_TEMP/committed-schema.json" contracts/schema-parity/generated-current/declmig-schema-parity.json
+      - name: Generate a second deterministic contract projection
+        run: |
+          cd contracts/schema-parity
+          ./node_modules/.bin/tsp compile main.tsp --output-dir generated-second --warn-as-error
+          diff -ru generated-current generated-second
+      - name: Rust format, tests, and lint
+        run: |
+          cargo fmt --all -- --check
+          cargo test --locked --all-targets
+          cargo clippy --locked --all-targets -- -D warnings
+      - name: Verify the exact head stayed immutable
+        run: git diff --exit-code

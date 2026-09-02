@@ -12,20 +12,38 @@ pub const AUTOMATIC_AUTHORITY_WINNER_ALLOWED: bool = false;
 /// A schema release is ineligible without all-pass peer comparison evidence.
 pub const SCHEMA_RELEASE_REQUIRES_PEER_PARITY: bool = true;
 
+/// Runtime descriptor consumed by schema-release packaging and validation code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SchemaReleasePolicy {
+    pub peer_authority_certification_format: &'static str,
+    pub requires_peer_parity: bool,
+    pub automatic_authority_winner_allowed: bool,
+}
+
+/// Returns the fail-closed schema-release policy.
+#[must_use]
+pub fn schema_release_policy() -> SchemaReleasePolicy {
+    SchemaReleasePolicy {
+        peer_authority_certification_format: PEER_AUTHORITY_CERTIFICATION_FORMAT,
+        requires_peer_parity: SCHEMA_RELEASE_REQUIRES_PEER_PARITY,
+        automatic_authority_winner_allowed: AUTOMATIC_AUTHORITY_WINNER_ALLOWED,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{
-        AUTOMATIC_AUTHORITY_WINNER_ALLOWED, PEER_AUTHORITY_CERTIFICATION_FORMAT,
-        SCHEMA_RELEASE_REQUIRES_PEER_PARITY,
-    };
+    use super::{PEER_AUTHORITY_CERTIFICATION_FORMAT, SchemaReleasePolicy, schema_release_policy};
 
     #[test]
     fn schema_release_policy_is_fail_closed() {
+        let policy = schema_release_policy();
         assert_eq!(
-            PEER_AUTHORITY_CERTIFICATION_FORMAT,
-            "declmig.peer-authority-certification/v1"
+            policy,
+            SchemaReleasePolicy {
+                peer_authority_certification_format: PEER_AUTHORITY_CERTIFICATION_FORMAT,
+                requires_peer_parity: true,
+                automatic_authority_winner_allowed: false,
+            }
         );
-        assert!(SCHEMA_RELEASE_REQUIRES_PEER_PARITY);
-        assert!(!AUTOMATIC_AUTHORITY_WINNER_ALLOWED);
     }
 }

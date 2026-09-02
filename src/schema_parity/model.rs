@@ -133,9 +133,8 @@ impl SchemaProjection {
         if self.tables.is_empty() {
             return Err(ParityError::EmptyProjection);
         }
-        self.tables.sort_by(|left, right| {
-            (&left.schema, &left.name).cmp(&(&right.schema, &right.name))
-        });
+        self.tables
+            .sort_by(|left, right| (&left.schema, &left.name).cmp(&(&right.schema, &right.name)));
         Ok(self)
     }
 

@@ -1,4 +1,5 @@
-name: Freeze schema parity outputs through guarded PR lane
+name: Schema projection parity
+
 on:
   pull_request:
     paths:
@@ -10,57 +11,26 @@ on:
       - 'Cargo.lock'
       - '.zpkg.toml'
       - 'rust-toolchain.toml'
-      - 'ci/schema-parity-final.yml'
       - '.github/workflows/schema-parity.yml'
-      - '.github/workflows/schema-parity-freeze.yml'
+
 permissions:
-  contents: write
+  contents: read
+
 concurrency:
-  group: schema-parity-freeze-${{ github.event.pull_request.number }}
+  group: schema-parity-${{ github.event.pull_request.number }}
   cancel-in-progress: true
+
 jobs:
-  freeze:
-    if: >-
-      github.repository == 'declarative-migrations/declmig-lib-core' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.head_ref == 'codex/den-3321-schema-projection-parity'
+  test:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+      PACKAGE_LOCK_SHA256: 415bcb3c9e68a8c61d3625cead1edf825b39cf0af34b4a9300a43190fbdf7966
+      GENERATED_SCHEMA_SHA256: 54451a3428a52de34044e1a42d75087ccee58e5dc2fc253bee0da7ecee749791
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: true
-          fetch-depth: 1
-          ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '22.16.0'
-      - name: Install exact Zed CLI
-        run: |
-          cargo install --git https://github.com/zed-pkg/zed-cli.git --rev dbd63f1d87d12c2e8cb9a8c600fae9b79f94e559 --locked --root "$RUNNER_TEMP/declmig-zed"
-          echo "$RUNNER_TEMP/declmig-zed/bin" >> "$GITHUB_PATH"
-      - name: Generate, format, and verify deterministic review outputs
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          zed validate
-          cargo generate-lockfile
-          zed task --plan contracts/schema-parity/zed-env.json run lock --yes --no-cache
-          zed task --plan contracts/schema-parity/zed-env.json run generate --yes --no-cache
-          cargo fmt --all
-          cargo test --locked --all-targets
-          cargo clippy --locked --all-targets -- -D warnings
-          rm -rf contracts/schema-parity/generated-second
-      - name: Commit only the reviewed outputs and final read-only workflow
-        run: |
-          set -euo pipefail
-          cp ci/schema-parity-final.yml .github/workflows/schema-parity.yml
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- Cargo.lock contracts/schema-parity/package-lock.json src tests .github/workflows/schema-parity.yml
-          git add -f -- contracts/schema-parity/generated-current/declmig-schema-parity.json
-          git rm -- ci/schema-parity-final.yml .github/workflows/schema-parity-freeze.yml
-          unexpected="$(git diff --cached --name-only | grep -Ev '^(Cargo.lock|contracts/schema-parity/package-lock.json|contracts/schema-parity/generated-current/declmig-schema-parity.json|src/.*\.rs|tests/.*\.rs|ci/schema-parity-final\.yml|\.github/workflows/schema-parity\.yml|\.github/workflows/schema-parity-freeze\.yml)$' || true)"
-          test -z "$unexpected"
-          git commit -m 'chore(DEN-3321): freeze schema parity locks and generated evidence'
-          git push origin HEAD:refs/heads/codex/den-3321-schema-projection-parity
+      - uses: actions/checkouÙØÍ™MXXXÍX˜NNYMÍLÌNLÌØ˜NLŒBˆÚ]‚ˆ\œÚ\İXÜ™Y[X[Îˆ˜[ÙBˆ™Yˆ	ŞÈÚ]X‹™]™[œ[Ü™\]Y\İšXYœÚH_BˆH˜[YNˆ™\šYH^XİˆXYˆ[ˆ\İ‰
+Ú]™]‹\\œÙHPQ
+HˆH‰VPÕQÒPQ‚ˆH\Ù\ÎˆXİ[ÛœËÜÙ]\[›ÙPNLÌÙXMLØYXØN™YNY˜™ÙÙŒŒˆÚ]‚ˆ›ÙK]™\œÚ[Ûˆ	ÌŒ‹ŒM‹Œ	ÂˆH˜[YNˆ[œİ[^Xİ™YÓBˆ[ˆˆØ\™ÛÈ[œİ[KYÚ]Î‹ËÙÚ]X‹˜ÛÛKŞ™Y\ÙËŞ™YXÛK™Ú]K\™]ˆ™ŒÙŒYÙL˜Ì™NØXNÍŒ˜YNXÎYMMMNHK[ØÚÙYK\›Ûİ‰•S“‘T—ÕSTÙXÛZYË^™Y‚ˆXÚÈ‰•S“‘T—ÕSTÙXÛZYË^™YØš[ˆˆˆ‰ÒUP—ÔU‚ˆH˜[YNˆ™\]Z\™Hœ›Ş™[ˆ\İY]Y]H[™˜[Y]H™YXÚØYÙBˆ[ˆˆ\İYˆØ\™ÛË›ØÚÂˆXÚÈ	ÎYM™ŒLŒLMN™ŒMLXX™NMÍXÍ™YMÌÎÙ˜ŒNLLMMÎHØ\™ÛË›ØÚÉÈÚLMœİ[HKXÚXÚÈK\İšXİˆ™Y˜[Y]BˆH˜[YNˆ™XÛÛœİXİ[™™\šYHH™]šY]ÙYœHØÚÂˆ[ˆˆÙÛÛ˜XİËÜØÚ[XK\\š]BˆœH[œİ[K\XÚØYÙK[ØÚË[Û›HKZYÛ›Ü™K\ØÜš\ÈK[›ËX]Y]K[›ËY[™ˆXÚÈ‰PÒĞQÑWÓĞÒ×ÔÒLMˆXÚØYÙK[ØÚËšœÛÛˆˆÚLMœİ[HKXÚXÚÈK\İšXİˆH˜[YNˆ™YÙ[™\˜]H\TÜXÈ”ÓÓˆØÚ[XH]\›Z[š\İXØ[Bˆ[ˆˆ™Y\ÚÈK\[ˆÛÛ˜XİËÜØÚ[XK\\š]KŞ™YY[‹šœÛÛˆ[ˆÙ[™\˜]HK^Y\ÈK[›ËXØXÚBˆXÚÈ‰ÑS‘TUQÔĞÒSPWÔÒLMˆÛÛ˜XİËÜØÚ[XK\\š]KÙÙ[™\˜]YXİ\œ™[ÙXÛZYË\ØÚ[XK\\š]KšœÛÛˆˆÚLMœİ[HKXÚXÚÈK\İšXİˆÙÛÛ˜XİËÜØÚ[XK\\š]Bˆ‹Û›ÙWÛ[Ù[\ËË˜š[‹İÜÛÛ\[HXZ[‹ÜK[İ]]Y\ˆÙ[™\˜]Y\ÙXÛÛ™K]Ø\›‹X\ËY\œ›Ü‚ˆY™ˆ\HÙ[™\˜]YXİ\œ™[Ù[™\˜]Y\ÙXÛÛ™ˆH˜[YNˆ\İ›Ü›X]\İË[™[ˆ[ˆˆØ\™ÛÈ›]KX[KHKXÚXÚÂˆØ\™ÛÈ\İK[ØÚÙYKX[]\™Ù]ÂˆØ\™ÛÈÛ\HK[ØÚÙYKX[]\™Ù]ÈKHQØ\›š[™ÜÂˆH˜[YNˆ™[[İ™H\[Y\˜[Ù[™\˜]Üˆİ]]ÂˆYˆ[Ø^\Ê
+Bˆ[ˆˆ›H\™ˆÛÛ˜XİËÜØÚ[XK\\š]KÛ›ÙWÛ[Ù[\Âˆ›H\™ˆÛÛ˜XİËÜØÚ[XK\\š]KÙÙ[™\˜]YXİ\œ™[ˆ›H\™ˆÛÛ˜XİËÜØÚ[XK\\š]KÙÙ[™\˜]Y\ÙXÛÛ™ˆ›HYˆÛÛ˜XİËÜØÚ[XK\\š]KÜXÚØYÙK[ØÚËšœÛÛ‚ˆH˜[YNˆ™\šYH[[]]X›HÚXÚÛİ]ˆYˆİXØÙ\ÜÊ
+Bˆ[ˆÚ]Y™ˆKY^]XÛÙB

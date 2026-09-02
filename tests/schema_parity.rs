@@ -1,6 +1,6 @@
 use declmig_lib_core::schema_parity::{
-    DatabaseEngine, DifferenceCode, ProjectionSource, compare, parse_diesel_schema,
-    parse_seaorm_entity,
+    compare, parse_diesel_schema, parse_seaorm_entity, DatabaseEngine, DifferenceCode,
+    ProjectionSource,
 };
 
 const DIESEL: &str = r#"
@@ -55,7 +55,10 @@ fn diesel_and_seaorm_structural_projections_match() {
 
     let report = compare(diesel, seaorm).expect("comparison");
     assert!(report.compatible, "{:#?}", report.differences);
-    assert!(report.warnings.iter().any(|warning| warning.code == "vector-dimensions-not-proven"));
+    assert!(report
+        .warnings
+        .iter()
+        .any(|warning| warning.code == "vector-dimensions-not-proven"));
 }
 
 #[test]
@@ -80,8 +83,11 @@ fn nullability_and_type_drift_are_deterministic_failures() {
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
         codes,
-        [DifferenceCode::NullabilityMismatch, DifferenceCode::TypeFamilyMismatch]
-            .into_iter()
-            .collect()
+        [
+            DifferenceCode::NullabilityMismatch,
+            DifferenceCode::TypeFamilyMismatch
+        ]
+        .into_iter()
+        .collect()
     );
 }

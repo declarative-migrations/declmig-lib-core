@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use declmig_lib_core::schema_parity::{
-    DatabaseEngine, ParityError, SchemaProjection, compare, parse_diesel_schema,
-    parse_seaorm_directory, read_json, write_json,
+    compare, parse_diesel_schema, parse_seaorm_directory, read_json, write_json, DatabaseEngine,
+    ParityError, SchemaProjection,
 };
 
 fn main() -> ExitCode {
@@ -30,7 +30,10 @@ fn run(arguments: Vec<String>) -> Result<ExitDisposition, ParityError> {
     let (command, options) = parse_arguments(arguments)?;
     match command.as_str() {
         "parse-diesel" => {
-            require_only(&options, &["input", "output", "engine", "schema", "generator-version"])?;
+            require_only(
+                &options,
+                &["input", "output", "engine", "schema", "generator-version"],
+            )?;
             let input = required_path(&options, "input")?;
             let output = required_path(&options, "output")?;
             let source = read_text(&input)?;
@@ -44,7 +47,16 @@ fn run(arguments: Vec<String>) -> Result<ExitDisposition, ParityError> {
             Ok(ExitDisposition::Compatible)
         }
         "parse-seaorm" => {
-            require_only(&options, &["input-dir", "output", "engine", "schema", "generator-version"])?;
+            require_only(
+                &options,
+                &[
+                    "input-dir",
+                    "output",
+                    "engine",
+                    "schema",
+                    "generator-version",
+                ],
+            )?;
             let projection = parse_seaorm_directory(
                 &required_path(&options, "input-dir")?,
                 DatabaseEngine::parse(required(&options, "engine")?)?,
@@ -60,7 +72,11 @@ fn run(arguments: Vec<String>) -> Result<ExitDisposition, ParityError> {
             let actual: SchemaProjection = read_json(&required_path(&options, "actual")?)?;
             let report = compare(expected, actual)?;
             write_json(&required_path(&options, "output")?, &report)?;
-            Ok(if report.compatible { ExitDisposition::Compatible } else { ExitDisposition::Drift })
+            Ok(if report.compatible {
+                ExitDisposition::Compatible
+            } else {
+                ExitDisposition::Drift
+            })
         }
         "validate" => {
             require_only(&options, &["input"])?;
@@ -72,7 +88,9 @@ fn run(arguments: Vec<String>) -> Result<ExitDisposition, ParityError> {
     }
 }
 
-fn parse_arguments(arguments: Vec<String>) -> Result<(String, BTreeMap<String, String>), ParityError> {
+fn parse_arguments(
+    arguments: Vec<String>,
+) -> Result<(String, BTreeMap<String, String>), ParityError> {
     let mut iter = arguments.into_iter();
     let command = iter.next().ok_or(ParityError::InvalidArgument)?;
     let mut options = BTreeMap::new();
@@ -109,12 +127,17 @@ fn required<'a>(options: &'a BTreeMap<String, String>, key: &str) -> Result<&'a 
 fn required_path(options: &BTreeMap<String, String>, key: &str) -> Result<PathBuf, ParityError> {
     let value = required(options, key)?;
     let path = PathBuf::from(value);
-    if path.as_os_str().is_empty() { Err(ParityError::InvalidPath) } else { Ok(path) }
+    if path.as_os_str().is_empty() {
+        Err(ParityError::InvalidPath)
+    } else {
+        Ok(path)
+    }
 }
 
 fn read_text(path: &Path) -> Result<String, ParityError> {
     let metadata = fs::symlink_metadata(path).map_err(|_| ParityError::InvalidPath)?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 32 * 1024 * 1024 {
+    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 32 * 1024 * 1024
+    {
         return Err(ParityError::InvalidPath);
     }
     Ok(fs::read_to_string(path)?)

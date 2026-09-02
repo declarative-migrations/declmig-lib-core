@@ -2,9 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::{
-    ColumnProjection, DatabaseEngine, DatabaseIdentity, GeneratorIdentity, ParityError,
-    ProjectionSource, SchemaProjection, TableProjection, PARITY_SCHEMA_VERSION,
-    normalize_type_family,
+    normalize_type_family, ColumnProjection, DatabaseEngine, DatabaseIdentity, GeneratorIdentity,
+    ParityError, ProjectionSource, SchemaProjection, TableProjection, PARITY_SCHEMA_VERSION,
 };
 
 pub fn parse_seaorm_directory(
@@ -50,7 +49,10 @@ pub fn parse_seaorm_directory(
     .normalize()
 }
 
-pub fn parse_seaorm_entity(source: &str, default_schema: &str) -> Result<Option<TableProjection>, ParityError> {
+pub fn parse_seaorm_entity(
+    source: &str,
+    default_schema: &str,
+) -> Result<Option<TableProjection>, ParityError> {
     let lines: Vec<_> = source.lines().collect();
     let mut index = 0;
     let mut model_attributes = Vec::new();
@@ -80,7 +82,12 @@ pub fn parse_seaorm_entity(source: &str, default_schema: &str) -> Result<Option<
             while index < lines.len() {
                 let line = clean(lines[index]);
                 if line == "}" {
-                    return Ok(Some(TableProjection { schema, name: table_name, primary_key, columns }));
+                    return Ok(Some(TableProjection {
+                        schema,
+                        name: table_name,
+                        primary_key,
+                        columns,
+                    }));
                 }
                 if line.starts_with("#[sea_orm(") {
                     let (attribute, next) = collect_attribute(&lines, index)?;
@@ -98,7 +105,10 @@ pub fn parse_seaorm_entity(source: &str, default_schema: &str) -> Result<Option<
                         .iter()
                         .find_map(|attribute| attribute_string(attribute, "column_name"))
                         .unwrap_or_else(|| strip_raw_identifier(rust_name).to_owned());
-                    if field_attributes.iter().any(|attribute| attribute_flag(attribute, "primary_key")) {
+                    if field_attributes
+                        .iter()
+                        .any(|attribute| attribute_flag(attribute, "primary_key"))
+                    {
                         primary_key.push(column_name.clone());
                     }
                     let column_type = field_attributes
@@ -108,7 +118,8 @@ pub fn parse_seaorm_entity(source: &str, default_schema: &str) -> Result<Option<
                     let type_family = normalize_seaorm_type(column_type.as_deref(), inner_type)?;
                     columns.push(ColumnProjection {
                         name: column_name,
-                        ordinal: u32::try_from(columns.len() + 1).map_err(|_| ParityError::InvalidOrdinal)?,
+                        ordinal: u32::try_from(columns.len() + 1)
+                            .map_err(|_| ParityError::InvalidOrdinal)?,
                         type_family,
                         nullable,
                         native_type: Some(
@@ -125,7 +136,11 @@ pub fn parse_seaorm_entity(source: &str, default_schema: &str) -> Result<Option<
             }
             return Err(ParityError::InvalidGeneratedSource);
         }
-        if !line.is_empty() && !line.starts_with("//") && !line.starts_with("#[") && !line.starts_with("pub struct Model") {
+        if !line.is_empty()
+            && !line.starts_with("//")
+            && !line.starts_with("#[")
+            && !line.starts_with("pub struct Model")
+        {
             model_attributes.clear();
         }
         index += 1;
@@ -133,7 +148,11 @@ pub fn parse_seaorm_entity(source: &str, default_schema: &str) -> Result<Option<
     Ok(None)
 }
 
-fn collect_rust_files(root: &Path, current: &Path, output: &mut Vec<PathBuf>) -> Result<(), ParityError> {
+fn collect_rust_files(
+    root: &Path,
+    current: &Path,
+    output: &mut Vec<PathBuf>,
+) -> Result<(), ParityError> {
     for entry in fs::read_dir(current)? {
         let entry = entry?;
         let path = entry.path();
@@ -143,12 +162,17 @@ fn collect_rust_files(root: &Path, current: &Path, output: &mut Vec<PathBuf>) ->
         }
         if metadata.is_dir() {
             collect_rust_files(root, &path, output)?;
-        } else if metadata.is_file() && path.extension().and_then(|value| value.to_str()) == Some("rs") {
+        } else if metadata.is_file()
+            && path.extension().and_then(|value| value.to_str()) == Some("rs")
+        {
             let canonical = path.canonicalize().map_err(|_| ParityError::InvalidPath)?;
             if !canonical.starts_with(root) {
                 return Err(ParityError::InvalidPath);
             }
-            let name = path.file_name().and_then(|value| value.to_str()).unwrap_or_default();
+            let name = path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default();
             if !matches!(name, "mod.rs" | "prelude.rs") {
                 output.push(canonical);
             }
@@ -166,7 +190,7 @@ fn collect_attribute(lines: &[&str], start: usize) -> Result<(String, usize), Pa
         }
         attribute.push_str(clean(lines[index]));
         index += 1;
-        if attribute.ends_with(")]" ) {
+        if attribute.ends_with(")]") {
             return Ok((attribute, index));
         }
         if attribute.len() > 16 * 1024 {
@@ -182,7 +206,9 @@ fn parse_field(line: &str) -> Result<(&str, &str), ParityError> {
         .ok_or(ParityError::InvalidGeneratedSource)?
         .trim_end_matches(',')
         .trim();
-    let (name, rust_type) = field.split_once(':').ok_or(ParityError::InvalidGeneratedSource)?;
+    let (name, rust_type) = field
+        .split_once(':')
+        .ok_or(ParityError::InvalidGeneratedSource)?;
     let name = name.trim();
     let rust_type = rust_type.trim();
     if name.is_empty() || rust_type.is_empty() {
@@ -193,14 +219,22 @@ fn parse_field(line: &str) -> Result<(&str, &str), ParityError> {
 }
 
 fn peel_option(value: &str) -> (bool, &str) {
-    peel_wrapper(value, "Option").map(|inner| (true, inner)).unwrap_or((false, value.trim()))
+    peel_wrapper(value, "Option")
+        .map(|inner| (true, inner))
+        .unwrap_or((false, value.trim()))
 }
 
-fn normalize_seaorm_type(column_type: Option<&str>, rust_type: &str) -> Result<String, ParityError> {
+fn normalize_seaorm_type(
+    column_type: Option<&str>,
+    rust_type: &str,
+) -> Result<String, ParityError> {
     if let Some(column_type) = column_type {
         return normalize_seaorm_column_type(column_type);
     }
-    let compact = rust_type.chars().filter(|character| !character.is_whitespace()).collect::<String>();
+    let compact = rust_type
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
     if let Some(inner) = peel_wrapper(&compact, "Vec") {
         if inner == "u8" {
             return normalize_type_family("bytea");
@@ -218,7 +252,10 @@ fn normalize_seaorm_column_type(value: &str) -> Result<String, ParityError> {
         return Ok(format!("array<{}>", normalize_seaorm_column_type(inner)?));
     }
     if value.starts_with("Custom(") {
-        let custom = quoted_values(value).into_iter().next().unwrap_or_else(|| "unknown".to_owned());
+        let custom = quoted_values(value)
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "unknown".to_owned());
         return normalize_type_family(&custom);
     }
     let head = value.split(['(', '<']).next().unwrap_or(value).trim();
@@ -227,7 +264,9 @@ fn normalize_seaorm_column_type(value: &str) -> Result<String, ParityError> {
 
 fn peel_parenthesized<'a>(value: &'a str, wrapper: &str) -> Option<&'a str> {
     let prefix = format!("{wrapper}(");
-    value.strip_prefix(&prefix).and_then(|inner| inner.strip_suffix(')'))
+    value
+        .strip_prefix(&prefix)
+        .and_then(|inner| inner.strip_suffix(')'))
 }
 
 fn attribute_string(attribute: &str, key: &str) -> Option<String> {
@@ -282,7 +321,9 @@ fn quoted_values(value: &str) -> Vec<String> {
 fn peel_wrapper<'a>(value: &'a str, wrapper: &str) -> Option<&'a str> {
     let value = value.trim();
     let prefix = format!("{wrapper}<");
-    value.strip_prefix(&prefix).and_then(|inner| inner.strip_suffix('>'))
+    value
+        .strip_prefix(&prefix)
+        .and_then(|inner| inner.strip_suffix('>'))
 }
 
 fn clean(line: &str) -> &str {
@@ -318,7 +359,9 @@ mod tests {
                 pub notes: Option<String>,
             }
         "#;
-        let table = parse_seaorm_entity(source, "public").expect("parse").expect("entity");
+        let table = parse_seaorm_entity(source, "public")
+            .expect("parse")
+            .expect("entity");
         assert_eq!(table.name, "embedding_models");
         assert_eq!(table.primary_key, ["tenant_id", "id"]);
         assert_eq!(table.columns[2].name, "type");
@@ -329,6 +372,9 @@ mod tests {
 
     #[test]
     fn ignores_non_entity_source() {
-        assert_eq!(parse_seaorm_entity("pub fn helper() {}", "public"), Ok(None));
+        assert_eq!(
+            parse_seaorm_entity("pub fn helper() {}", "public"),
+            Ok(None)
+        );
     }
 }

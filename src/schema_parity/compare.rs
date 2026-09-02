@@ -47,7 +47,10 @@ pub struct ParityReport {
     pub warnings: Vec<ParityWarning>,
 }
 
-pub fn compare(expected: SchemaProjection, actual: SchemaProjection) -> Result<ParityReport, ParityError> {
+pub fn compare(
+    expected: SchemaProjection,
+    actual: SchemaProjection,
+) -> Result<ParityReport, ParityError> {
     let expected = expected.normalize()?;
     let actual = actual.normalize()?;
     let mut differences = Vec::new();
@@ -73,10 +76,16 @@ pub fn compare(expected: SchemaProjection, actual: SchemaProjection) -> Result<P
 
     let expected_tables = expected.table_map();
     let actual_tables = actual.table_map();
-    let all_tables: BTreeSet<_> = expected_tables.keys().chain(actual_tables.keys()).copied().collect();
+    let all_tables: BTreeSet<_> = expected_tables
+        .keys()
+        .chain(actual_tables.keys())
+        .copied()
+        .collect();
     for key in all_tables {
         match (expected_tables.get(&key), actual_tables.get(&key)) {
-            (Some(expected_table), Some(actual_table)) => compare_table(expected_table, actual_table, &mut differences),
+            (Some(expected_table), Some(actual_table)) => {
+                compare_table(expected_table, actual_table, &mut differences)
+            }
             (Some(_), None) => differences.push(Difference {
                 code: DifferenceCode::MissingTable,
                 table: qualified_name(key.0, key.1),
@@ -104,12 +113,21 @@ pub fn compare(expected: SchemaProjection, actual: SchemaProjection) -> Result<P
         ("indexes-not-proven", "Generated ORM projections do not prove every unique, partial, expression, or vector index."),
         ("row-security-not-proven", "Generated ORM projections do not prove grants, roles, row-level security, or tenant authorization."),
     ];
-    if expected.tables.iter().chain(&actual.tables).flat_map(|table| &table.columns).any(|column| column.type_family == "vector") {
+    if expected
+        .tables
+        .iter()
+        .chain(&actual.tables)
+        .flat_map(|table| &table.columns)
+        .any(|column| column.type_family == "vector")
+    {
         warning_codes.push(("vector-dimensions-not-proven", "Rust ORM projections usually preserve the vector family but not its configured dimensions; verify dimensions from the catalog and DPM plan."));
     }
     let warnings = warning_codes
         .into_iter()
-        .map(|(code, detail)| ParityWarning { code: code.to_owned(), detail: detail.to_owned() })
+        .map(|(code, detail)| ParityWarning {
+            code: code.to_owned(),
+            detail: detail.to_owned(),
+        })
         .collect();
 
     Ok(ParityReport {
@@ -122,7 +140,11 @@ pub fn compare(expected: SchemaProjection, actual: SchemaProjection) -> Result<P
     })
 }
 
-fn compare_table(expected: &TableProjection, actual: &TableProjection, differences: &mut Vec<Difference>) {
+fn compare_table(
+    expected: &TableProjection,
+    actual: &TableProjection,
+    differences: &mut Vec<Difference>,
+) {
     let table = qualified_name(&expected.schema, &expected.name);
     if expected.primary_key != actual.primary_key {
         differences.push(Difference {
@@ -134,13 +156,27 @@ fn compare_table(expected: &TableProjection, actual: &TableProjection, differenc
         });
     }
 
-    let expected_columns: BTreeMap<_, _> = expected.columns.iter().map(|column| (column.name.as_str(), column)).collect();
-    let actual_columns: BTreeMap<_, _> = actual.columns.iter().map(|column| (column.name.as_str(), column)).collect();
-    let all_columns: BTreeSet<_> = expected_columns.keys().chain(actual_columns.keys()).copied().collect();
+    let expected_columns: BTreeMap<_, _> = expected
+        .columns
+        .iter()
+        .map(|column| (column.name.as_str(), column))
+        .collect();
+    let actual_columns: BTreeMap<_, _> = actual
+        .columns
+        .iter()
+        .map(|column| (column.name.as_str(), column))
+        .collect();
+    let all_columns: BTreeSet<_> = expected_columns
+        .keys()
+        .chain(actual_columns.keys())
+        .copied()
+        .collect();
 
     for name in all_columns {
         match (expected_columns.get(name), actual_columns.get(name)) {
-            (Some(expected_column), Some(actual_column)) => compare_column(&table, expected_column, actual_column, differences),
+            (Some(expected_column), Some(actual_column)) => {
+                compare_column(&table, expected_column, actual_column, differences)
+            }
             (Some(_), None) => differences.push(Difference {
                 code: DifferenceCode::MissingColumn,
                 table: table.clone(),
@@ -160,7 +196,12 @@ fn compare_table(expected: &TableProjection, actual: &TableProjection, differenc
     }
 }
 
-fn compare_column(table: &str, expected: &ColumnProjection, actual: &ColumnProjection, differences: &mut Vec<Difference>) {
+fn compare_column(
+    table: &str,
+    expected: &ColumnProjection,
+    actual: &ColumnProjection,
+    differences: &mut Vec<Difference>,
+) {
     if expected.ordinal != actual.ordinal {
         differences.push(Difference {
             code: DifferenceCode::ColumnOrdinalMismatch,

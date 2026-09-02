@@ -15,6 +15,7 @@ pub enum DatabaseEngine {
 }
 
 impl DatabaseEngine {
+    /// Parse the explicit engine identity carried by a parity artifact.
     pub fn parse(value: &str) -> Result<Self, ParityError> {
         match value {
             "postgresql" => Ok(Self::PostgreSql),
@@ -124,7 +125,7 @@ impl SchemaProjection {
                 return Err(ParityError::InvalidOrdinal);
             }
 
-            let known_columns: BTreeSet|_> = table
+            let known_columns: BTreeSet<_> = table
                 .columns
                 .iter()
                 .map(|column| column.name.as_str())
@@ -217,7 +218,7 @@ mod tests {
     use super::{SchemaProjection, PARITY_SCHEMA_VERSION};
 
     fn valid_projection() -> serde_json::Value {
-        json!( {
+        json!({
             "schema_version": PARITY_SCHEMA_VERSION,
             "source": "catalog",
             "generator": {

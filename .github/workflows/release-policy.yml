@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/schema.rs'
       - 'src/lib.rs'
+      - 'tests/release_policy.rs'
       - 'docs/peer-persistence-reconciliation.md'
       - 'Cargo.toml'
       - 'Cargo.lock'

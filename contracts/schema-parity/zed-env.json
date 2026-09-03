@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "tasks": {
+    "lock": {
+      "description": "Resolve the explicitly reviewed TypeSpec toolchain",
+      "dir": "contracts/schema-parity",
+      "run": ["npm install --package-lock-only --ignore-scripts --no-audit --no-fund"]
+    },
+    "install": {
+      "description": "Install the committed native tool lock through Zed",
+      "dir": "contracts/schema-parity",
+      "run": ["npm ci --ignore-scripts --no-audit --no-fund"]
+    },
+    "generate": {
+      "dir": "contracts/schema-parity",
+      "depends": ["install"],
+      "run": ["npm run generate"]
+    }
+  }
+}

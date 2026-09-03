@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "policy_id": "declmig.dual-source-authority.v1",
+  "derived_translations": {
+    "comparison_only": true,
+    "may_feed_production_lane": false,
+    "required_provenance": [
+      "origin_lane",
+      "source_revision",
+      "compiler_name",
+      "compiler_version",
+      "input_sha256",
+      "output_sha256"
+    ]
+  },
+  "source_lanes": {
+    "typespec": {
+      "authority": "independent-top-level",
+      "source_inputs": [
+        "typespec-source"
+      ],
+      "forbidden_production_inputs": [
+        "json-schema-openapi-source",
+        "typespec-emitted-json-schema",
+        "typespec-emitted-openapi"
+      ],
+      "required_outputs": [
+        "semantic-ir",
+        "sql",
+        "protobuf-descriptors",
+        "grpc-services",
+        "wire-client-types",
+        "wire-clients"
+      ]
+    },
+    "json-schema-openapi": {
+      "authority": "independent-top-level",
+      "source_inputs": [
+        "json-schema-source",
+        "openapi-source"
+      ],
+      "forbidden_production_inputs": [
+        "typespec-source",
+        "typespec-emitted-json-schema",
+        "typespec-emitted-openapi"
+      ],
+      "required_outputs": [
+        "semantic-ir",
+        "sql",
+        "client-interfaces",
+        "client-types",
+        "write-clients"
+      ]
+    }
+  },
+  "comparisons": {
+    "sql-catalog": {
+      "required_inputs": [
+        "typespec-sql",
+        "json-schema-openapi-sql"
+      ],
+      "materialization": "separate-disposable-databases",
+      "primary_oracle": "normalized-catalog-equivalence",
+      "required_dimensions": [
+        "schemas",
+        "tables",
+        "columns",
+        "ordinals",
+        "native-types",
+        "normalized-type-families",
+        "nullability",
+        "defaults",
+        "generated-expressions",
+        "primary-keys",
+        "unique-keys",
+        "foreign-keys",
+        "reference-actions",
+        "checks",
+        "exclusions",
+        "indexes",
+        "predicates",
+        "expressions",
+        "partitioning",
+        "enums-domains",
+        "vector-dimensions",
+        "rls",
+        "policies",
+        "grants",
+        "roles",
+        "ownership"
+      ]
+    },
+    "shared-client-semantics": {
+      "required_inputs": [
+        "typespec-client-semantic-manifest",
+        "json-schema-openapi-client-semantic-manifest"
+      ],
+      "mapping_policy": "explicit-reviewed-versioned",
+      "required_dimensions": [
+        "type-identity",
+        "field-identity",
+        "wire-names",
+        "required-optional-nullable",
+        "scalar-widths",
+        "signedness",
+        "formats",
+        "arrays",
+        "maps",
+        "unions",
+        "discriminators",
+        "enums",
+        "unknown-enum-values",
+        "constraints",
+        "defaults",
+        "read-write-direction",
+        "operations",
+        "request-response-errors"
+      ]
+    },
+    "diesel-seaorm": {
+      "required_inputs": [
+        "diesel-projection",
+        "seaorm-projection"
+      ],
+      "generation_policy": "independent-from-same-pinned-catalog",
+      "required_dimensions": [
+        "table-identity",
+        "ordered-keys",
+        "columns",
+        "native-types",
+        "normalized-type-families",
+        "nullability",
+        "defaults",
+        "relations",
+        "shared-behavior-fixtures"
+      ]
+    }
+  },
+  "convergence": {
+    "all_required": true,
+    "participants": [
+      "typespec-sql-catalog",
+      "json-schema-openapi-sql-catalog",
+      "reviewed-dpm-desired-catalog",
+      "diesel-projection",
+      "seaorm-projection",
+      "shadow-live-catalog-readback"
+    ],
+    "database_lanes": [
+      "postgresql",
+      "cockroachdb"
+    ]
+  },
+  "discrepancy_policy": {
+    "status": "STOPPED_FOR_EVALUATION",
+    "blocks": [
+      "migration-promotion",
+      "orm-promotion",
+      "package-publication",
+      "client-publication",
+      "merge",
+      "deployment"
+    ],
+    "deduplicate_by": "deterministic-fingerprint",
+    "required_evidence": [
+      "source-revisions",
+      "compiler-generator-versions",
+      "input-output-catalog-digests",
+      "minimal-semantic-diff",
+      "exact-head-ci"
+    ],
+    "resume_policy": "human-reviewed-repair-or-expiring-waiver-then-clean-rerun",
+    "silent_winner_forbidden": true
+  }
+}

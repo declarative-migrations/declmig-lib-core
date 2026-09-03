@@ -1,0 +1,59 @@
+name: Peer-authority release policy
+
+on:
+  pull_request:
+    paths:
+      - 'src/schema.rs'
+      - 'src/lib.rs'
+      - 'tests/release_policy.rs'
+      - 'docs/peer-persistence-reconciliation.md'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/release-policy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out the exact reviewed head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+
+      - name: Prove exact-head execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Install the repository Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup set profile minimal
+          rustup toolchain install 1.90.0 --component rustfmt --component clippy
+          test "$(rustc +1.90.0 --version | awk '{print $2}')" = '1.90.0'
+
+      - name: Validate the release-policy API
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.90.0 fmt --all -- --check
+          cargo +1.90.0 test --locked --all-targets --all-features
+          cargo +1.90.0 clippy --locked --all-targets --all-features -- -D warnings
+          cargo +1.90.0 build --locked --release
+          git diff --exit-code -- .

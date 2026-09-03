@@ -34,6 +34,32 @@ One source is never regenerated from the other during certification. Shared fixt
 
 Any failure moves the release to `paused`, not to a fallback lane.
 
+## Machine-readable release policy
+
+The public Rust API exposes the immutable packaging boundary through
+`schema_release_policy()` and the versioned certificate identifier
+`declmig.peer-authority-certification/v1`.
+
+The policy requires these six independently produced participants:
+
+```text
+typespec-sql-catalog
+json-schema-openapi-sql-catalog
+reviewed-dpm-desired-catalog
+diesel-projection
+seaorm-projection
+shadow-live-catalog-readback
+```
+
+Missing, malformed, stale, or unequal evidence produces the stable terminal
+status `STOPPED_FOR_EVALUATION`. `automatic_authority_winner_allowed` is always
+false: packaging code must not choose TypeSpec, JSON Schema/OpenAPI, Diesel,
+SeaORM, DPM, or a live catalog as a fallback winner.
+
+This API describes eligibility; it does not itself certify a release. A caller
+must validate the signed/digested evidence envelope and recompute every required
+comparison at the exact source and generator revisions before publication.
+
 ## Discrepancy handling
 
 A discrepancy report must identify:

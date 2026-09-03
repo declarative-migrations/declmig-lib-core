@@ -1,12 +1,4 @@
 package validation
-
-import "testing"
-
-func TestRejectsEmptyRequestID(t *testing.T) {
-	if err := Validate(RequestMeta{TraceID: "trace-1"}); err == nil { t.Fatal("expected validation error") }
-}
-
-func TestDecodeRejectsUnknownFields(t *testing.T) {
-	_, err := DecodeAndValidate[RequestMeta]([]byte(`{"requestId":"req-1","traceId":"trace-1","userId":"client-supplied"}`))
-	if err == nil { t.Fatal("expected unknown field error") }
-}
+import ("strings"; "testing")
+func TestPublicBoundaries(t *testing.T) { for _, v := range []RequestMeta{{RequestID:"req-1",TraceID:"trace-1"},{RequestID:strings.Repeat("r",128),TraceID:strings.Repeat("t",128),Locale:strings.Repeat("l",64)}} { if err:=Validate(v); err!=nil { t.Fatal(err) } }; for _,v:=range []RequestMeta{{TraceID:"trace-1"},{RequestID:strings.Repeat("r",129),TraceID:"trace-1"},{RequestID:"req-1",TraceID:"trace-1",Locale:"e"}} { if Validate(v)==nil { t.Fatalf("expected invalid: %#v",v) } }; for _,v:=range []PageQuery{{Limit:1},{Limit:100,Cursor:strings.Repeat("c",512)}} { if err:=Validate(v);err!=nil{t.Fatal(err)} }; for _,v:=range []PageQuery{{Limit:0},{Limit:101},{Limit:50,Cursor:strings.Repeat("c",513)}} { if Validate(v)==nil{t.Fatalf("expected invalid: %#v",v)} }; p:=ProblemDetails{Type:"urn:test",Title:"bad",Status:400,RequestID:"req-1"}; if err:=Validate(p);err!=nil{t.Fatal(err)}; p.Status=600;if Validate(p)==nil{t.Fatal("expected invalid status")} }
+func TestDecodeFailuresAndExactText(t *testing.T){ for _,data:=range [][]byte{[]byte(`{"requestId":"req-1","traceId":"trace-1","userId":"x"}`),[]byte(`{"requestId":"req-1"}`),[]byte(`{"requestId":"req-1","traceId":"trace-1"} {}`)}{if _,err:=DecodeAndValidate[RequestMeta](data);err==nil{t.Fatalf("expected decode failure: %s",data)}};v,err:=DecodeAndValidate[RequestMeta]([]byte(`{"requestId":" req-1 ","traceId":" trace-1 "}`));if err!=nil{t.Fatal(err)};if v.RequestID!=" req-1 "{t.Fatalf("normalized: %#v",v)}}

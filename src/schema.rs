@@ -4,8 +4,7 @@
 pub const SCHEMA_REVISION: &str = "declmig-0002";
 
 /// Versioned evidence envelope required before a schema release can be packaged.
-pub const PEER_AUTHORITY_CERTIFICATION_FORMAT: &str =
-    "declmig.peer-authority-certification/v1";
+pub const PEER_AUTHORITY_CERTIFICATION_FORMAT: &str = "declmig.peer-authority-certification/v1";
 
 /// Stable terminal state for any missing, invalid, or unequal peer evidence.
 pub const DISCREPANCY_STATUS: &str = "STOPPED_FOR_EVALUATION";
@@ -54,8 +53,8 @@ mod tests {
 
     use super::{
         schema_release_policy, SchemaReleasePolicy, AUTOMATIC_AUTHORITY_WINNER_ALLOWED,
-        DISCREPANCY_STATUS, PEER_AUTHORITY_CERTIFICATION_FORMAT,
-        REQUIRED_CONVERGENCE_PARTICIPANTS, SCHEMA_RELEASE_REQUIRES_PEER_PARITY,
+        DISCREPANCY_STATUS, PEER_AUTHORITY_CERTIFICATION_FORMAT, REQUIRED_CONVERGENCE_PARTICIPANTS,
+        SCHEMA_RELEASE_REQUIRES_PEER_PARITY,
     };
 
     #[test]

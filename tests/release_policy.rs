@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, hint::black_box};
 
 use declmig_lib_core::{
     schema_release_policy, SchemaReleasePolicy, AUTOMATIC_AUTHORITY_WINNER_ALLOWED,
@@ -10,23 +10,25 @@ const POLICY: SchemaReleasePolicy = schema_release_policy();
 
 #[test]
 fn public_release_policy_remains_fail_closed() {
-    assert_eq!(SCHEMA_REVISION, "declmig-0002");
+    let policy = black_box(POLICY);
+
+    assert_eq!(black_box(SCHEMA_REVISION), "declmig-0002");
     assert_eq!(
-        POLICY.peer_authority_certification_format,
-        PEER_AUTHORITY_CERTIFICATION_FORMAT
+        policy.peer_authority_certification_format,
+        black_box(PEER_AUTHORITY_CERTIFICATION_FORMAT)
     );
-    assert_eq!(POLICY.discrepancy_status, DISCREPANCY_STATUS);
-    assert_eq!(DISCREPANCY_STATUS, "STOPPED_FOR_EVALUATION");
-    assert!(POLICY.requires_peer_parity);
-    assert!(SCHEMA_RELEASE_REQUIRES_PEER_PARITY);
-    assert!(!POLICY.automatic_authority_winner_allowed);
-    assert!(!AUTOMATIC_AUTHORITY_WINNER_ALLOWED);
+    assert_eq!(policy.discrepancy_status, black_box(DISCREPANCY_STATUS));
+    assert_eq!(black_box(DISCREPANCY_STATUS), "STOPPED_FOR_EVALUATION");
+    assert!(policy.requires_peer_parity);
+    assert!(black_box(SCHEMA_RELEASE_REQUIRES_PEER_PARITY));
+    assert!(!policy.automatic_authority_winner_allowed);
+    assert!(!black_box(AUTOMATIC_AUTHORITY_WINNER_ALLOWED));
     assert_eq!(
-        POLICY.required_convergence_participants,
-        &REQUIRED_CONVERGENCE_PARTICIPANTS
+        policy.required_convergence_participants,
+        black_box(&REQUIRED_CONVERGENCE_PARTICIPANTS)
     );
 
-    let unique = POLICY
+    let unique = policy
         .required_convergence_participants
         .iter()
         .copied()

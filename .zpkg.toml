@@ -1,4 +1,30 @@
+[package]
+org = "declarative-migrations"
 name = "declmig-lib-core"
-kind = "lib-core"
-version = "0.1.0"
+version = "0.2.0"
+description = "Canonical persistence contracts and deterministic Diesel/SeaORM schema parity tooling"
+license = "MIT"
+keywords = ["postgresql", "cockroachdb", "diesel", "seaorm", "typespec", "json-schema"]
 
+[package.repository]
+vcs = "git"
+url = "https://github.com/declarative-migrations/declmig-lib-core"
+
+[targets.rust]
+dir = "."
+adapter = "rust"
+
+[publish]
+include_readme = true
+tag_format = "v{version}"
+smoke_test = "cargo test --all-targets"
+exclude = [
+  "target/**",
+  "contracts/schema-parity/node_modules/**",
+  "contracts/schema-parity/generated-current/**",
+  "contracts/schema-parity/generated-second/**",
+  ".zed/**",
+]
+
+[install]
+dir = ".vendor/.zed"

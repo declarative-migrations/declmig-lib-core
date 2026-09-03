@@ -1,0 +1,299 @@
+name: Schema projection parity
+
+on:
+  pull_request:
+    paths:
+      - 'src/schema_parity/**'
+      - 'src/bin/declmig-schema-crosscheck.rs'
+      - 'tests/schema_parity.rs'
+      - 'contracts/schema-parity/**'
+      - 'contracts/source-authority/**'
+      - 'scripts/ci/validate_source_authority.py'
+      - 'tests/test_source_authority.py'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.zpkg.toml'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/schema-parity.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: schema-parity-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+      PACKAGE_LOCK_SHA256: 6e98459e9fb44e26fd487a6065221d8772ca6d347e5bea20d9573168055ee667
+      PACKAGE_LOCK_GZIP_SHA256: 143a699309004cb5fed90203ed7f608d7f8ac6a96adefd86af81143a02f31afe
+      PACKAGE_INVENTORY_SHA256: 069b2df75722044bf82e6602e1507e948c9399c1ebf5719967735aee06c95b55
+      PACKAGE_COUNT: '74'
+      GENERATED_SCHEMA_SHA256: 54451a3428a52de34044e1a42d75087ccee58e5dc2fc253bee0da7ecee749791
+    steps:
+      - name: Check out the exact reviewed head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+
+      - name: Prove exact-head execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Set up exact Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.16.0'
+          package-manager-cache: false
+
+      - name: Set up exact Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup set profile minimal
+          rustup toolchain install 1.90.0 --component rustfmt --component clippy
+          rustup default 1.90.0
+          test "$(rustc --version | awk '{print $2}')" = '1.90.0'
+
+      - name: Validate source-authority and Zed package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/validate_source_authority.py
+          python3 -m unittest discover \
+            -s tests \
+            -p 'test_source_authority.py' \
+            -v
+          python3 - <<'PY'
+          import json
+          import tomllib
+          from pathlib import Path
+
+          cargo = tomllib.loads(Path('Cargo.toml').read_text(encoding='utf-8'))
+          zed = tomllib.loads(Path('.zpkg.toml').read_text(encoding='utf-8'))
+          tasks = json.loads(
+              Path('contracts/schema-parity/zed-env.json').read_text(encoding='utf-8')
+          )
+          assert zed['package']['org'] == 'declarative-migrations'
+          assert zed['package']['name'] == cargo['package']['name']
+          assert zed['package']['version'] == cargo['package']['version']
+          assert set(tasks['tasks']) == {'lock', 'install', 'generate'}
+          PY
+
+      - name: Install only from the reviewed TypeSpec lock
+        shell: bash
+        working-directory: contracts/schema-parity
+        run: |
+          set -euo pipefail
+          test "$(npm --version)" = '10.9.2'
+          printf '%s  %s\n' \
+            "$PACKAGE_LOCK_GZIP_SHA256" \
+            package-lock.json.gz \
+            | sha256sum --check --strict
+          gzip -dc package-lock.json.gz > package-lock.json
+          printf '%s  %s\n' \
+            "$PACKAGE_LOCK_SHA256" \
+            package-lock.json \
+            | sha256sum --check --strict
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ls --all --json > "$RUNNER_TEMP/typespec-npm-tree.json"
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          lock_path = Path('package-lock.json')
+          lock = json.loads(lock_path.read_text(encoding='utf-8'))
+          review = json.loads(
+              Path('package-lock.review.json').read_text(encoding='utf-8')
+          )
+          tree_path = Path(os.environ['RUNNER_TEMP']) / 'typespec-npm-tree.json'
+          tree = json.loads(tree_path.read_text(encoding='utf-8'))
+          expected_roots = {
+              '@typespec/compiler': '1.15.0',
+              '@typespec/json-schema': '1.15.0',
+          }
+          expected_lock_sha = os.environ['PACKAGE_LOCK_SHA256']
+          expected_gzip_sha = os.environ['PACKAGE_LOCK_GZIP_SHA256']
+          expected_inventory_sha = os.environ['PACKAGE_INVENTORY_SHA256']
+          expected_count = int(os.environ['PACKAGE_COUNT'])
+
+          packages = lock.get('packages')
+          if not isinstance(packages, dict):
+              raise SystemExit('package-lock packages map is missing')
+          root = packages.get('')
+          if not isinstance(root, dict):
+              raise SystemExit('package-lock root package is missing')
+          if root.get('devDependencies') != expected_roots:
+              raise SystemExit('package-lock root dependencies do not match package.json')
+
+          resolved_roots = {}
+          inventory = []
+          for path, package in sorted(packages.items()):
+              if not path:
+                  continue
+              if not isinstance(package, dict):
+                  raise SystemExit(f'invalid package-lock entry: {path}')
+              version = package.get('version')
+              integrity = package.get('integrity')
+              resolved = package.get('resolved')
+              if not isinstance(version, str) or not version:
+                  raise SystemExit(f'missing package version: {path}')
+              if not isinstance(integrity, str) or not integrity.startswith('sha512-'):
+                  raise SystemExit(f'missing sha512 integrity: {path}')
+              if not isinstance(resolved, str):
+                  raise SystemExit(f'missing package resolution: {path}')
+              parsed = urlsplit(resolved)
+              if parsed.scheme != 'https' or parsed.hostname != 'registry.npmjs.org':
+                  raise SystemExit(f'unreviewed package resolution: {path}')
+              if any(package.get(flag) for flag in ('link', 'inBundle', 'hasInstallScript')):
+                  raise SystemExit(f'forbidden package execution/link flag: {path}')
+              name = path.rsplit('node_modules/', 1)[-1]
+              inventory.append(
+                  {
+                      'path': path,
+                      'name': name,
+                      'version': version,
+                      'integrity': integrity,
+                  }
+              )
+              if name in expected_roots:
+                  resolved_roots[name] = version
+
+          if resolved_roots != expected_roots:
+              raise SystemExit('resolved TypeSpec roots do not match reviewed versions')
+
+          def reject_invalid(node: object, path: str = '$') -> None:
+              if not isinstance(node, dict):
+                  return
+              for flag in ('invalid', 'extraneous'):
+                  if node.get(flag) is True:
+                      raise SystemExit(f'npm tree contains {flag} package at {path}')
+              dependencies = node.get('dependencies')
+              if isinstance(dependencies, dict):
+                  for name, child in sorted(dependencies.items()):
+                      reject_invalid(child, f'{path}.dependencies.{name}')
+
+          reject_invalid(tree)
+          canonical_inventory = json.dumps(
+              inventory,
+              sort_keys=True,
+              separators=(',', ':'),
+          ).encode('utf-8')
+          lock_sha = hashlib.sha256(lock_path.read_bytes()).hexdigest()
+          gzip_sha = hashlib.sha256(Path('package-lock.json.gz').read_bytes()).hexdigest()
+          inventory_sha = hashlib.sha256(canonical_inventory).hexdigest()
+
+          if lock_sha != expected_lock_sha:
+              raise SystemExit('package-lock digest drift')
+          if gzip_sha != expected_gzip_sha:
+              raise SystemExit('compressed package-lock digest drift')
+          if inventory_sha != expected_inventory_sha:
+              raise SystemExit('package inventory digest drift')
+          if len(inventory) != expected_count:
+              raise SystemExit('package inventory count drift')
+
+          expected_review = {
+              'format': 'npm-lockfile-v3-gzip',
+              'node_version': '22.16.0',
+              'npm_version': '10.9.2',
+              'reviewed_roots': expected_roots,
+              'package_count': expected_count,
+              'package_inventory_sha256': expected_inventory_sha,
+              'package_lock_sha256': expected_lock_sha,
+              'package_lock_gzip_sha256': expected_gzip_sha,
+              'resolved_host_allowlist': ['registry.npmjs.org'],
+              'all_packages_have_sha512_integrity': True,
+              'git_file_link_dependencies_present': False,
+              'install_scripts_present': False,
+          }
+          for key, expected in expected_review.items():
+              if review.get(key) != expected:
+                  raise SystemExit(f'package-lock review drift: {key}')
+
+          evidence = {
+              'schema_version': 1,
+              'node_version': '22.16.0',
+              'npm_version': '10.9.2',
+              'package_lock_sha256': lock_sha,
+              'package_lock_gzip_sha256': gzip_sha,
+              'package_count': len(inventory),
+              'package_inventory_sha256': inventory_sha,
+              'reviewed_roots': expected_roots,
+              'packages': inventory,
+          }
+          output = Path(os.environ['RUNNER_TEMP']) / 'typespec-lock-evidence.json'
+          output.write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(
+              'reviewed package inventory '
+              f"count={evidence['package_count']} "
+              f"sha256={evidence['package_inventory_sha256']}"
+          )
+          PY
+
+      - name: Audit the reviewed TypeSpec dependencies
+        shell: bash
+        working-directory: contracts/schema-parity
+        run: |
+          set -euo pipefail
+          npm audit --audit-level=high --no-fund
+
+      - name: Retain the TypeSpec lock evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: typespec-lock-evidence-${{ github.event.pull_request.head.sha }}
+          path: |
+            contracts/schema-parity/package-lock.json
+            contracts/schema-parity/package-lock.review.json
+            ${{ runner.temp }}/typespec-lock-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
+
+      - name: Generate the TypeSpec evidence envelope twice
+        shell: bash
+        working-directory: contracts/schema-parity
+        run: |
+          set -euo pipefail
+          first="$RUNNER_TEMP/schema-parity-first"
+          second="$RUNNER_TEMP/schema-parity-second"
+          rm -rf "$first" "$second"
+          ./node_modules/.bin/tsp compile main.tsp --output-dir "$first" --warn-as-error
+          ./node_modules/.bin/tsp compile main.tsp --output-dir "$second" --warn-as-error
+          diff -ru --no-dereference "$first" "$second"
+          actual_schema_sha256="$(sha256sum "$first/declmig-schema-parity.json" | awk '{print $1}')"
+          echo "generated TypeSpec evidence-envelope sha256=$actual_schema_sha256"
+          test "$actual_schema_sha256" = "$GENERATED_SCHEMA_SHA256"
+          python3 -m json.tool "$first/declmig-schema-parity.json" >/dev/null
+
+      - name: Format, test, lint, and release-build the Rust comparator
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo test --locked --all-targets --all-features
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo build --locked --release --bin declmig-schema-crosscheck
+
+      - name: Prove CI did not rewrite tracked source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- .

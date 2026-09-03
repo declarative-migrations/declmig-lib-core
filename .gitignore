@@ -8,5 +8,6 @@
 .env.*
 !.env.example
 *.sqlite
-Cargo.lock
-
+/contracts/schema-parity/node_modules/
+/contracts/schema-parity/generated-current/
+/contracts/schema-parity/generated-second/

@@ -1,0 +1,9 @@
+emit:
+  - '@typespec/json-schema'
+options:
+  '@typespec/json-schema':
+    emitter-output-dir: '{output-dir}'
+    file-type: json
+    bundleId: declmig-schema-parity.json
+    seal-object-schemas: true
+    int64-strategy: string

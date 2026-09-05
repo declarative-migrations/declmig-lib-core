@@ -11,3 +11,7 @@
 /contracts/schema-parity/node_modules/
 /contracts/schema-parity/generated-current/
 /contracts/schema-parity/generated-second/
+
+# Local temporary directories and Git worktrees (DEN-3956).
+tmp/
+temp/

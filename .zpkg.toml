@@ -10,6 +10,14 @@ keywords = ["postgresql", "cockroachdb", "diesel", "seaorm", "typespec", "json-s
 vcs = "git"
 url = "https://github.com/declarative-migrations/declmig-lib-core"
 
+# Fleet coordination and contract admission are shared dependencies. Runtime
+# provider choices (Fiducia, PostgreSQL advisory locks, Redis, Cloudflare DO)
+# remain behind ores-locks-and-leases; Declarative Migrations must not import a
+# concrete distributed lock provider directly.
+[dependencies]
+"oresoftware/ores-locks-and-leases" = "=0.1.1"
+"oresoftware/ores-contracts" = "^0.1.0"
+
 [targets.rust]
 dir = "."
 adapter = "rust"

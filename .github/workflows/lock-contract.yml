@@ -1,0 +1,79 @@
+name: Declarative Migrations lock contract
+
+on:
+  pull_request:
+    paths:
+      - ".zpkg.toml"
+      - "locks/**"
+      - ".github/workflows/lock-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".zpkg.toml"
+      - "locks/**"
+      - ".github/workflows/lock-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: declmig-lock-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  peer-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git diff --check
+
+      - name: Verify shared coordination dependency boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F '"oresoftware/ores-locks-and-leases" = "=0.1.1"' .zpkg.toml
+          if git grep -n -I -E '(^|[^A-Za-z0-9_-])fiducia[-_](client|clients|sdk)|git(hub)?\.com/fiducia-cloud' -- ':!locks/**' ':!docs/**'; then
+            echo 'direct Fiducia provider dependency is forbidden; use ORESoftware/ores-locks-and-leases' >&2
+            exit 1
+          fi
+
+      - name: Compare independent lock catalog authorities
+        uses: ORESoftware/typespec-json-schema-validator@c745036456dd80408b83217118b8563edb8f6abd
+        with:
+          typespec: locks/contracts/typespec/main.tsp
+          schema: locks/contracts/json-schema/contract.schema.json
+          instances: locks/contracts/instances
+          report: .typespec-json-schema-validator/locks-report.json
+          sarif: .typespec-json-schema-validator/locks-report.sarif
+          contract_ir: .typespec-json-schema-validator/locks-contract-ir.json
+          output_dir: .typespec-json-schema-validator/locks-generated
+          max_probes: "64"
+
+      - name: Verify authored lock authorities remain immutable
+        shell: bash
+        run: git diff --exit-code -- locks/contracts/
+
+      - name: Retain lock contract evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: declmig-lock-contract-${{ github.run_id }}
+          path: .typespec-json-schema-validator/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

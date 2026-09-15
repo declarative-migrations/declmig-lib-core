@@ -1,0 +1,6 @@
+{
+  "org": "declarative-migrations",
+  "prefix": "declmig",
+  "directProvider": "fiducia",
+  "entries": []
+}

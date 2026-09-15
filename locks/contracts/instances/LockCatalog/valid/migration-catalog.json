@@ -1,0 +1,17 @@
+{
+  "org": "declarative-migrations",
+  "prefix": "declmig",
+  "entries": [
+    {
+      "domain": "migrations",
+      "name": "apply:{target_id}",
+      "layers": {
+        "fiducia": true,
+        "pgAdvisory": true
+      },
+      "pgScope": "session",
+      "wait": false,
+      "description": "One migration runner per admitted target execution window."
+    }
+  ]
+}

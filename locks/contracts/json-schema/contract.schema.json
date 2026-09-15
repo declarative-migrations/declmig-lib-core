@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/declarative-migrations/declmig-lib-core/locks/contracts/json-schema/contract.schema.json",
+  "$comment": "Declarative Migrations coordination catalog — independently authored JSON Schema authority. Peer of ../typespec/main.tsp; neither is generated from the other.",
+  "$ref": "#/$defs/LockCatalog",
+  "$defs": {
+    "LockLayers": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "properties": {
+        "fiducia": { "type": "boolean" },
+        "pgAdvisory": { "type": "boolean" }
+      },
+      "required": ["fiducia", "pgAdvisory"]
+    },
+    "PgScope": {
+      "type": "string",
+      "enum": ["transaction", "session"]
+    },
+    "LockCatalogEntry": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "properties": {
+        "domain": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 256 },
+        "layers": { "$ref": "#/$defs/LockLayers" },
+        "pgScope": { "$ref": "#/$defs/PgScope" },
+        "wait": { "type": "boolean" },
+        "description": { "type": "string", "maxLength": 1024 }
+      },
+      "required": ["domain", "name", "layers", "pgScope", "wait", "description"]
+    },
+    "LockCatalog": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "properties": {
+        "org": { "type": "string", "maxLength": 64 },
+        "prefix": { "type": "string", "maxLength": 64 },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/LockCatalogEntry" }
+        }
+      },
+      "required": ["org", "prefix", "entries"]
+    }
+  }
+}

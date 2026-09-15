@@ -1,0 +1,28 @@
+{
+  "org": "declarative-migrations",
+  "prefix": "declmig",
+  "entries": [
+    {
+      "domain": "migrations",
+      "name": "apply",
+      "layers": {
+        "fiducia": true,
+        "pgAdvisory": true
+      },
+      "pgScope": "session",
+      "wait": false,
+      "description": "Serialize one migration plan/apply/convergence window per target. Session scope supports DDL that cannot be enclosed in one transaction; the outer lease provides multi-runner ownership and fencing."
+    },
+    {
+      "domain": "migrations",
+      "name": "apply:{target_id}",
+      "layers": {
+        "fiducia": true,
+        "pgAdvisory": true
+      },
+      "pgScope": "session",
+      "wait": false,
+      "description": "Target-scoped execution lock for the privileged migration runner. target_id must be the stable non-secret target identity from the admitted execution contract, never a raw DSN."
+    }
+  ]
+}

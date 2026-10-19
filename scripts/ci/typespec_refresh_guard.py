@@ -5,7 +5,7 @@ regenerates both uncompressed/compressed locks and the complete review receipt.
 No one may mark the existing 1.15.0 evidence as security-certified.
 """
 import json,pathlib,re
-ROOT=pathlib.Path(__file__).resolve().parents[1]
+ROOT=pathlib.Path(__file__).resolve().parents[2]
 def check_refresh(candidate,review):
     pkg=candidate["devDependencies"]
     roots=review["reviewed_roots"]

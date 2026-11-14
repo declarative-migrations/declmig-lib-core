@@ -47,6 +47,46 @@ pub const fn schema_release_policy() -> SchemaReleasePolicy {
     }
 }
 
+/// Admission decision for a reviewed set of independently produced peer digests.
+/// A match is necessary but cannot replace independent human/CI evidence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PeerAdmission {
+    Approved,
+    Denied,
+}
+
+/// Check the exact six peer identities, canonical digest and approval bit.
+/// Missing, unrecognized, malformed, or duplicate evidence fails closed.
+#[must_use]
+pub fn check_peer_admission(
+    canonical_sha256: &str,
+    peers: &[(&str, &str)],
+    independently_reviewed: bool,
+) -> PeerAdmission {
+    fn valid_sha(s: &str) -> bool {
+        s.len() == 64
+            && s.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    }
+    if !independently_reviewed
+        || !valid_sha(canonical_sha256)
+        || peers.len() != REQUIRED_CONVERGENCE_PARTICIPANTS.len()
+    {
+        return PeerAdmission::Denied;
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for &(identity, digest) in peers {
+        if !REQUIRED_CONVERGENCE_PARTICIPANTS.contains(&identity)
+            || !seen.insert(identity)
+            || !valid_sha(digest)
+            || digest != canonical_sha256
+        {
+            return PeerAdmission::Denied;
+        }
+    }
+    PeerAdmission::Approved
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -56,6 +96,44 @@ mod tests {
         DISCREPANCY_STATUS, PEER_AUTHORITY_CERTIFICATION_FORMAT, REQUIRED_CONVERGENCE_PARTICIPANTS,
         SCHEMA_RELEASE_REQUIRES_PEER_PARITY,
     };
+
+    #[test]
+    fn peer_admission_requires_exact_six_reviewed_digests() {
+        use super::{check_peer_admission, PeerAdmission};
+        let sha = "a".repeat(64);
+        let peers: Vec<(&str, &str)> = REQUIRED_CONVERGENCE_PARTICIPANTS
+            .iter()
+            .map(|p| (*p, sha.as_str()))
+            .collect();
+        assert_eq!(
+            check_peer_admission(&sha, &peers, true),
+            PeerAdmission::Approved
+        );
+        assert_eq!(
+            check_peer_admission(&sha, &peers, false),
+            PeerAdmission::Denied
+        );
+        assert_eq!(
+            check_peer_admission(&sha, &peers[..5], true),
+            PeerAdmission::Denied
+        );
+        let mut mutated = peers.clone();
+        mutated[1] = (mutated[0].0, mutated[1].1);
+        assert_eq!(
+            check_peer_admission(&sha, &mutated, true),
+            PeerAdmission::Denied
+        );
+        mutated = peers.clone();
+        mutated[1] = (mutated[1].0, "b");
+        assert_eq!(
+            check_peer_admission(&sha, &mutated, true),
+            PeerAdmission::Denied
+        );
+        assert_eq!(
+            check_peer_admission("ABC", &peers, true),
+            PeerAdmission::Denied
+        );
+    }
 
     #[test]
     fn schema_release_policy_is_fail_closed() {
